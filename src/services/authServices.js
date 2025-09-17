@@ -1,77 +1,105 @@
-// src/services/authServices.js
-const API_BASE_URL = 'http://localhost:3000/api'; // Cambiar por tu URL del backend cuando esté listo
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
+
+// Ajusta según dónde pruebas:
+// 1) Web / iOS simulador: localhost
+// 2) Emulador Android: 10.0.2.2
+// 3) Dispositivo físico: tu IP LAN (ej: 192.168.1.9)
+const PC_LAN_IP = 'http://192.168.1.9:4000/usuarios';
+
+const API_BASE_URL =
+  Platform.OS === 'android'
+    ? PC_LAN_IP        // Cambia a 'http://10.0.2.2:4000/usuarios' si es EMULADOR
+    : 'http://localhost:4000/usuarios';
 
 class AuthService {
   async registerUser(userData) {
+    console.log('[register] POST', `${API_BASE_URL}/register`, userData);
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/register`, {
+      const resp = await fetch(`${API_BASE_URL}/register`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(userData),
       });
+      const rawText = await resp.text();
+  let data = {};
+      try { data = rawText ? JSON.parse(rawText) : {}; } catch { data = { _raw: rawText }; }
 
-      const data = await response.json();
+      console.log('[register] status:', resp.status, 'raw:', rawText, 'parsed:', data);
 
-      if (!response.ok) {
-        throw new Error(data.message || 'Error en el registro');
+      if (!resp.ok) {
+        let backendMsg = '';
+        if (typeof data === 'object') backendMsg = data.message || data.error || '';
+        if (!backendMsg) backendMsg = rawText || '';
+
+        let msg = backendMsg.trim();
+        if (!msg) msg = resp.status === 409 ? 'Conflicto: duplicado' : 'Error en el registro';
+
+        // Normalizaciones duplicados
+        if (/usuario.*ya existe/i.test(msg)) msg = 'El usuario ya existe';
+        else if (/(correo|email).*ya (est[aá])|email.*already/i.test(msg)) msg = 'El correo ya está registrado';
+        else if (/correo.*existe/i.test(msg)) msg = 'El correo ya está registrado';
+        else if (resp.status === 409 && !/usuario|correo/i.test(msg)) msg = 'El usuario o correo ya existe';
+
+        const errorObj = new Error(msg);
+        errorObj.status = resp.status;
+        errorObj.raw = rawText;
+        errorObj.backendMessage = backendMsg;
+        if (resp.status === 409 || /ya existe|ya est[aá]|duplicate|already/i.test(backendMsg)) errorObj.code = 'DUPLICATE';
+        throw errorObj;
       }
-
       return data;
-    } catch (error) {
-      // Si no hay conexión con el backend, simular respuesta exitosa
-      if (error.message.includes('Network request failed') || error.message.includes('fetch')) {
-        console.warn('Backend no disponible, simulando registro exitoso');
-        return {
-          success: true,
-          message: 'Usuario registrado (modo prueba)',
-          user: {
-            id: Date.now(),
-            name: userData.name,
-            email: userData.email,
-            phone: userData.phone,
-          }
-        };
+    } catch (e) {
+      if (e.message === 'Network request failed') {
+        throw new Error('No se pudo conectar al servidor. Verifica IP y red.');
       }
-      throw error;
+      throw e;
     }
   }
 
   async loginUser(credentials) {
+    console.log('[login] POST', `${API_BASE_URL}/login`, credentials.email);
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+      const resp = await fetch(`${API_BASE_URL}/login`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(credentials),
       });
+      let data;
+      try { data = await resp.json(); } catch { data = {}; }
 
-      const data = await response.json();
+      console.log('[login] status:', resp.status, 'body:', data);
 
-      if (!response.ok) {
-        throw new Error(data.message || 'Error en el login');
+      if (!resp.ok) {
+        const msg = resp.status === 401
+          ? 'Correo o contraseña inválidos'
+          : (data?.message || 'Error en el login');
+        throw new Error(msg);
       }
 
+      if (data.token) {
+        await AsyncStorage.setItem('userToken', data.token);
+        if (data.user) {
+          await AsyncStorage.setItem('userData', JSON.stringify(data.user));
+        }
+      }
       return data;
-    } catch (error) {
-      // Si no hay conexión con el backend, simular respuesta exitosa para desarrollo
-      if (error.message.includes('Network request failed') || error.message.includes('fetch')) {
-        console.warn('Backend no disponible, simulando login exitoso');
-        return {
-          success: true,
-          token: 'mock-token-' + Date.now(),
-          user: {
-            id: 1,
-            name: 'Usuario de Prueba',
-            email: credentials.email,
-          }
-        };
+    } catch (e) {
+      if (e.message === 'Network request failed') {
+        throw new Error('No se pudo conectar al servidor. Verifica IP y red.');
       }
-      throw error;
+      throw e;
     }
+  }
+
+  async getToken() {
+    return AsyncStorage.getItem('userToken');
+  }
+
+  async logout() {
+    await AsyncStorage.removeItem('userToken');
+    await AsyncStorage.removeItem('userData');
   }
 }
 
-export default new AuthService();
+export const authService = new AuthService();

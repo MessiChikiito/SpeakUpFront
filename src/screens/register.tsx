@@ -11,60 +11,95 @@ import {
   Alert,
   ScrollView,
 } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { authService } from '../services/authServices';
 
-interface RegisterScreenProps {
-  onRegister?: (username: string, password?: string) => void;
-  onGoToLogin?: () => void;
-}
+const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{6,}$/;
 
-const RegisterScreen: React.FC<RegisterScreenProps> = ({
-  onRegister,
-  onGoToLogin,
-}) => {
+const RegisterScreen: React.FC = () => {
   const [username, setUsername] = useState<string>('');
+  const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
+  const [confirmPassword, setConfirmPassword] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [showSuccess, setShowSuccess] = useState<boolean>(false);
+  const [showPassword, setShowPassword] = useState<boolean>(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState<boolean>(false);
+  const [errors, setErrors] = useState<{[key: string]: string}>({});
+  const [apiError, setApiError] = useState<string>('');
+  const navigation = useNavigation();
 
-  const handleRegister = async () => {
+  const validateFields = () => {
+    const newErrors: {[key: string]: string} = {};
+
     if (!username.trim()) {
-      Alert.alert('Error', 'Por favor ingresa un nombre de usuario');
-      return;
+      newErrors.username = 'Por favor ingresa un nombre de usuario';
+    } else if (username.trim().length < 3) {
+      newErrors.username = 'El nombre de usuario debe tener al menos 3 caracteres';
     }
 
-    // Validar longitud mínima del nombre de usuario
-    if (username.trim().length < 3) {
-      Alert.alert('Error', 'El nombre de usuario debe tener al menos 3 caracteres');
-      return;
+    if (!email.trim()) {
+      newErrors.email = 'Por favor ingresa un correo electrónico';
+    } else if (!emailRegex.test(email.trim())) {
+      newErrors.email = 'El correo electrónico no es válido';
     }
 
-    setIsLoading(true);
-    try {
-      if (onRegister) {
-        onRegister(username.trim(), password.trim() || undefined);
-      } else {
-        // Lógica de registro por defecto
-        console.log('Anonymous registration:', { 
-          username: username.trim(), 
-          hasPassword: !!password.trim() 
-        });
-        Alert.alert(
-          'Registro exitoso', 
-          `Bienvenido ${username}! Tu sesión es anónima.`,
-          [{ text: 'Continuar', style: 'default' }]
-        );
-      }
-    } catch (error) {
-      Alert.alert('Error', 'Error al crear la cuenta');
-    } finally {
-      setIsLoading(false);
+    if (!password) {
+      newErrors.password = 'Por favor ingresa una contraseña';
+    } else if (!passwordRegex.test(password)) {
+      newErrors.password = 'Debe tener mínimo 6 caracteres, una mayúscula, una minúscula y un número';
     }
+
+    if (password !== confirmPassword) {
+      newErrors.confirmPassword = 'Las contraseñas no coinciden';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
-  const handleGoToLogin = () => {
-    if (onGoToLogin) {
-      onGoToLogin();
-    } else {
-      Alert.alert('Info', 'Navegar a pantalla de login');
+  const handleRegister = async () => {
+    if (!validateFields()) return;
+    setApiError('');
+    setIsLoading(true);
+    try {
+      const result: any = await authService.registerUser({
+        username: username.trim(),
+        email: email.trim(),
+        password: password.trim(),
+      });
+      if (result.user) {
+        setShowSuccess(true);
+        setUsername('');
+        setEmail('');
+        setPassword('');
+        setConfirmPassword('');
+        setTimeout(() => {
+          setShowSuccess(false);
+          navigation.navigate('Login' as never);
+        }, 7000);
+      } else {
+  setApiError(result.error || 'Error en el registro');
+      }
+    } catch (error:any) {
+      console.log('[register.catch] error object:', error);
+      const rawMsg = (error && error.message) ? error.message : 'Error al crear la cuenta';
+      const code = error && error.code ? error.code : undefined;
+      if (code === 'DUPLICATE') {
+        // Mensaje ya viene normalizado desde el servicio
+        setApiError(rawMsg);
+        return;
+      }
+  if (/usuario.*ya existe/i.test(rawMsg)) setApiError('El usuario ya existe');
+  else if (/correo.*ya está/i.test(rawMsg)) setApiError('El correo ya está registrado');
+  else if (/correo.*existe/i.test(rawMsg)) setApiError('El correo ya está registrado');
+  else if (/existe|registrado/i.test(rawMsg)) setApiError('El usuario o correo ya existe');
+  else if (/conectar/i.test(rawMsg)) setApiError(rawMsg);
+  else if (/registrar.*usuario/i.test(rawMsg)) setApiError('El usuario o correo ya existe');
+  else setApiError(rawMsg);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -74,30 +109,24 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardAvoidingView}
       >
-        <ScrollView 
+        <ScrollView
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Header */}
           <View style={styles.header}>
             <Text style={styles.title}>Crear Cuenta</Text>
             <Text style={styles.subtitle}>Registro rápido y anónimo</Text>
           </View>
-
-          {/* Warning Message */}
           <View style={styles.warningContainer}>
             <Text style={styles.warningIcon}>⚠️</Text>
             <Text style={styles.warningText}>
-              Tus datos no se guardarán, el registro es anónimo
+              Tus datos no se mostrarán públicamente. No compartas información sensible.
             </Text>
           </View>
-
-          {/* Form */}
           <View style={styles.form}>
-            {/* Username Input */}
             <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Nombre de usuario anónimo</Text>
+              <Text style={styles.inputLabel}>Nombre de usuario</Text>
               <TextInput
                 style={styles.input}
                 value={username}
@@ -106,59 +135,130 @@ const RegisterScreen: React.FC<RegisterScreenProps> = ({
                 placeholderTextColor="#9CA3AF"
                 autoCapitalize="none"
                 autoCorrect={false}
-                editable={!isLoading}
+                editable={!isLoading && !showSuccess}
                 maxLength={20}
               />
               <Text style={styles.inputHelper}>
                 Mínimo 3 caracteres, máximo 20
               </Text>
+              {errors.username ? (
+                <Text style={styles.errorText}>{errors.username}</Text>
+              ) : null}
             </View>
-
-            {/* Password Input (Optional) */}
             <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>
-                Contraseña{' '}
-                <Text style={styles.optionalText}>(opcional)</Text>
-              </Text>
+              <Text style={styles.inputLabel}>Correo electrónico</Text>
               <TextInput
                 style={styles.input}
-                value={password}
-                onChangeText={setPassword}
-                placeholder="Contraseña"
+                value={email}
+                onChangeText={setEmail}
+                placeholder="Ej: usuario@email.com"
                 placeholderTextColor="#9CA3AF"
-                secureTextEntry={true}
                 autoCapitalize="none"
                 autoCorrect={false}
-                editable={!isLoading}
+                editable={!isLoading && !showSuccess}
+                keyboardType="email-address"
                 maxLength={50}
               />
+              {errors.email ? (
+                <Text style={styles.errorText}>{errors.email}</Text>
+              ) : null}
+            </View>
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Contraseña</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <TextInput
+                  style={[styles.input, { flex: 1 }]}
+                  value={password}
+                  onChangeText={setPassword}
+                  placeholder="Contraseña"
+                  placeholderTextColor="#9CA3AF"
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  editable={!isLoading && !showSuccess}
+                  maxLength={50}
+                />
+                <TouchableOpacity
+                  onPress={() => setShowPassword(!showPassword)}
+                  style={{ marginLeft: 8, width: 60, alignItems: 'center' }}
+                >
+                  <Text style={{ fontSize: 14, color: '#3B82F6', fontWeight: '500' }}>
+                    {showPassword ? 'Ocultar' : 'Mostrar'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
               <Text style={styles.inputHelper}>
-                Opcional para mayor seguridad
+                Mínimo 6 caracteres, una mayúscula, una minúscula y un número.
               </Text>
+              {errors.password ? (
+                <Text style={styles.errorText}>{errors.password}</Text>
+              ) : null}
+            </View>
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Confirmar contraseña</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <TextInput
+                  style={[styles.input, { flex: 1 }]}
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  placeholder="Repite la contraseña"
+                  placeholderTextColor="#9CA3AF"
+                  secureTextEntry={!showConfirmPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  editable={!isLoading && !showSuccess}
+                  maxLength={50}
+                />
+                <TouchableOpacity
+                  onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                  style={{ marginLeft: 8, width: 60, alignItems: 'center' }}
+                >
+                  <Text style={{ fontSize: 14, color: '#3B82F6', fontWeight: '500' }}>
+                    {showConfirmPassword ? 'Ocultar' : 'Mostrar'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              {errors.confirmPassword ? (
+                <Text style={styles.errorText}>{errors.confirmPassword}</Text>
+              ) : null}
             </View>
 
-            {/* Register Button */}
+            {apiError ? (
+              <View style={styles.inlineErrorBox}>
+                <Text style={styles.inlineErrorIcon}>❌</Text>
+                <Text style={styles.inlineErrorText}>{apiError}</Text>
+              </View>
+            ) : null}
+
+            {showSuccess && (
+              <>
+                <View style={styles.successContainer}>
+                  <Text style={styles.successTitle}>¡Registro exitoso!</Text>
+                  <Text style={styles.successText}>Tu cuenta ha sido creada correctamente.</Text>
+                </View>
+                <View style={styles.redirectContainer}>
+                  <Text style={styles.redirectText}>Redirigiendo a la pantalla de inicio de sesión...</Text>
+                </View>
+              </>
+            )}
+
             <TouchableOpacity
               style={[
                 styles.registerButton,
-                isLoading && styles.registerButtonDisabled,
+                (isLoading || showSuccess) && styles.registerButtonDisabled,
               ]}
               onPress={handleRegister}
-              disabled={isLoading}
+              disabled={isLoading || showSuccess}
             >
               <Text style={styles.registerButtonText}>
                 {isLoading ? 'Registrando...' : 'Registrarse'}
               </Text>
             </TouchableOpacity>
 
-            {/* Login Link */}
             <View style={styles.loginLinkContainer}>
-              <Text style={styles.loginLinkText}>¿Ya tienes cuenta? </Text>
-              <TouchableOpacity
-                onPress={handleGoToLogin}
-                disabled={isLoading}
-              >
-                <Text style={styles.loginLinkButton}>Iniciar sesión</Text>
+              <Text style={styles.loginLinkText}>¿Ya tienes una cuenta? </Text>
+              <TouchableOpacity onPress={() => navigation.navigate('Login' as never)}>
+                <Text style={styles.loginLinkButton}>Inicia sesión</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -206,6 +306,8 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 12,
     marginBottom: 24,
+    maxWidth: 380,
+    alignSelf: 'center',
   },
   warningIcon: {
     fontSize: 18,
@@ -255,7 +357,7 @@ const styles = StyleSheet.create({
   registerButton: {
     width: '100%',
     height: 50,
-    backgroundColor: '#10B981', // Verde
+    backgroundColor: '#10B981',
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
@@ -279,6 +381,41 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  successContainer: {
+    backgroundColor: '#D1FAE5',
+    borderRadius: 10,
+    padding: 16,
+    alignItems: 'center',
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#10B981',
+  },
+  successTitle: {
+    color: '#065F46',
+    fontWeight: 'bold',
+    fontSize: 18,
+    marginBottom: 6,
+  },
+  successText: {
+    color: '#065F46',
+    fontSize: 15,
+    marginBottom: 4,
+  },
+  successRedirect: { }, // deprecated (mantained if referenced elsewhere)
+  redirectContainer: {
+    backgroundColor: '#EFF6FF',
+    borderRadius: 10,
+    padding: 14,
+    alignItems: 'center',
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#93C5FD',
+  },
+  redirectText: {
+    color: '#1D4ED8',
+    fontSize: 13,
+    fontStyle: 'italic',
+  },
   loginLinkContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
@@ -293,6 +430,34 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#3B82F6',
     fontWeight: '500',
+  },
+  errorText: {
+    color: '#EF4444',
+    fontSize: 13,
+    marginTop: 2,
+    fontWeight: '500',
+  },
+  inlineErrorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEE2E2',
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    padding: 12,
+    borderRadius: 10,
+    marginBottom: 16,
+    width: '100%',
+    alignSelf: 'center',
+  },
+  inlineErrorIcon: {
+    fontSize: 16,
+    marginRight: 8,
+  },
+  inlineErrorText: {
+    flex: 1,
+    color: '#B91C1C',
+    fontSize: 13,
+    fontWeight: '600',
   },
 });
 

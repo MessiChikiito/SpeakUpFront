@@ -1,15 +1,21 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
   Text,
   FlatList,
+  RefreshControl,
   TouchableOpacity,
+  ActivityIndicator,
   StyleSheet,
   SafeAreaView,
-  RefreshControl,
   Alert,
   Dimensions,
 } from 'react-native';
+import { reportService } from '../services/reportServices';
+import ScreenHeader from '../components/ScreenHeader';
+import { getLocationLabel } from '../constants/ui';
+import { useAuth } from '../hooks/useAuth';
 
 // Tipos para las denuncias del usuario
 interface UserReport {
@@ -17,8 +23,9 @@ interface UserReport {
   title: string;
   description: string;
   category: string;
+  categoryId?: number;
   location: string;
-  severity: 'low' | 'medium' | 'high' | 'critical';
+  severity: 'low' | 'medium' | 'high' | 'critical'; // backend numeric -> mapped
   status: 'Pendiente' | 'Validado' | 'Rechazado' | 'En revisión';
   createdAt: string;
   updatedAt?: string;
@@ -32,213 +39,138 @@ interface MyReportsScreenProps {
 
 const { width } = Dimensions.get('window');
 
-const MyReportsScreen: React.FC<MyReportsScreenProps> = ({
+const MyReportsScreen: React.FC<MyReportsScreenProps & { navigation?: any }> = ({
+  navigation,
   onCreateNewReport,
   onReportPress,
   onGoBack,
 }) => {
+  const { user, isAuthenticated } = useAuth();
   const [reports, setReports] = useState<UserReport[]>([]);
-  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [error, setError] = useState('');
 
-  // Datos de ejemplo para las denuncias del usuario
-  const mockUserReports: UserReport[] = [
-    {
-      id: '1',
-      title: 'Demora en trámites municipales',
-      description: 'Los trámites de licencia están tardando más de 3 meses',
-      category: 'negligence',
-      location: 'municipal',
-      severity: 'medium',
-      status: 'Validado',
-      createdAt: '2025-08-25',
-    },
-    {
-      id: '2',
-      title: 'Cobros irregulares en transporte',
-      description: 'Conductores solicitan pagos extra no autorizados',
-      category: 'fraud',
-      location: 'transport',
-      severity: 'high',
-      status: 'En revisión',
-      createdAt: '2025-08-20',
-      updatedAt: '2025-08-22',
-    },
-    {
-      id: '3',
-      title: 'Falta de mantenimiento en parque público',
-      description: 'Equipos deteriorados y áreas sin limpieza',
-      category: 'negligence',
-      location: 'park',
-      severity: 'low',
-      status: 'Pendiente',
-      createdAt: '2025-08-15',
-    },
-    {
-      id: '4',
-      title: 'Discriminación en atención al público',
-      description: 'Trato diferencial basado en apariencia física',
-      category: 'discrimination',
-      location: 'hospital',
-      severity: 'high',
-      status: 'Rechazado',
-      createdAt: '2025-08-10',
-      updatedAt: '2025-08-12',
-    },
-  ];
-
-  useEffect(() => {
-    // Simular carga inicial de datos
-    setTimeout(() => {
-      setReports(mockUserReports);
-      setIsLoading(false);
-    }, 1000);
-  }, []);
-
-  const onRefresh = async () => {
-    setIsRefreshing(true);
-    // Simular recarga de datos
-    setTimeout(() => {
-      setReports([...mockUserReports]);
-      setIsRefreshing(false);
-    }, 1000);
+  const mapBackend = (arr: any[]): UserReport[] => {
+    if (!Array.isArray(arr)) return [];
+    return arr.map(r => {
+      const gravedadNum = Number(r.gravedad) || 1;
+      const sev = gravedadNum >=4 ? 'critical' : gravedadNum ===3 ? 'high' : gravedadNum ===2 ? 'medium' : 'low';
+      const estadoRaw = (r.estado || '').toLowerCase();
+      let estadoMap: UserReport['status'];
+      switch (estadoRaw) {
+        case 'validada':
+        case 'validado':
+          estadoMap = 'Validado'; break;
+        case 'rechazada':
+        case 'rechazado':
+          estadoMap = 'Rechazado'; break;
+        case 'revision':
+        case 'en_revision':
+          estadoMap = 'En revisión'; break;
+        default:
+          estadoMap = 'Pendiente';
+      }
+      return {
+        id: String(r.id),
+        title: r.titulo || r.title || '(Sin título)',
+        description: r.descripcion || r.description || '',
+        category: r.categoriaNombre || r.categoria?.nombre || (r.categoriaId ? `Categoría N° ${r.categoriaId}` : '—'),
+        categoryId: r.categoriaId ? Number(r.categoriaId) : undefined,
+  location: getLocationLabel(r.ubicacion || r.location) || '—',
+        severity: sev as UserReport['severity'],
+        status: estadoMap,
+        createdAt: r.createdAt || r.fechaCreacion || new Date().toISOString(),
+        updatedAt: r.updatedAt || r.fechaActualizacion
+      };
+    });
   };
 
-  const handleReportPress = (report: UserReport) => {
-    if (onReportPress) {
-      onReportPress(report);
-    } else {
-      Alert.alert(
-        'Detalles de denuncia',
-        `Título: ${report.title}\nEstado: ${report.status}\nFecha: ${report.createdAt}`
-      );
+  const load = useCallback(async () => {
+    if (!isAuthenticated) return;
+    setError('');
+    try {
+      if (!isRefreshing) setIsLoading(true);
+      const [data, cats] = await Promise.all([
+        reportService.listMine(),
+        reportService.getCategories()
+      ]);
+      const catsById = Array.isArray(cats) ? Object.fromEntries(cats.map((c:any)=>[String(c.id), c.nombre || c.name])) : {};
+      const mapped = mapBackend(data).map(r => {
+        if (r.categoryId && catsById[String(r.categoryId)]) {
+          return { ...r, category: catsById[String(r.categoryId)] };
+        }
+        return r;
+      });
+      setReports(mapped);
+    } catch (e: any) {
+      setError(e?.message || 'Error al cargar');
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
     }
+  }, [isAuthenticated]);
+
+  // (debug removido)
+
+  // Refresca cada vez que la pestaña gana foco
+  // Cargar al enfocar evitando ráfagas múltiples
+  const lastFocusLoadRef = useRef(0);
+  useFocusEffect(
+    useCallback(() => {
+      const now = Date.now();
+      if (now - lastFocusLoadRef.current < 500) {
+        return; // ignora foco duplicado rápido
+      }
+      lastFocusLoadRef.current = now;
+      load();
+    }, [load])
+  );
+
+  const onRefresh = () => {
+    setIsRefreshing(true);
+    load();
   };
 
   const handleCreateNew = () => {
     if (onCreateNewReport) {
       onCreateNewReport();
     } else {
-      Alert.alert('Nueva denuncia', 'Abrir pantalla de nueva denuncia');
+      // Si tienes tab “Nueva denuncia”, navega allí:
+      navigation?.navigate?.('Nueva denuncia');
     }
   };
 
-  const getStatusColor = (status: UserReport['status']): string => {
-    switch (status) {
-      case 'Validado': return '#10B981';
-      case 'Pendiente': return '#F59E0B';
-      case 'En revisión': return '#3B82F6';
-      case 'Rechazado': return '#EF4444';
-      default: return '#6B7280';
-    }
+  const handlePressReport = (report: UserReport) => {
+    if (onReportPress) onReportPress(report);
+  else navigation?.navigate?.('ReportDetail', { id: report.id });
   };
 
-  const getSeverityColor = (severity: UserReport['severity']): string => {
-    switch (severity) {
-      case 'low': return '#10B981';
-      case 'medium': return '#F59E0B';
-      case 'high': return '#EF4444';
-      case 'critical': return '#DC2626';
-      default: return '#6B7280';
-    }
-  };
-
-  const getSeverityLabel = (severity: UserReport['severity']): string => {
-    switch (severity) {
-      case 'low': return 'Baja';
-      case 'medium': return 'Media';
-      case 'high': return 'Alta';
-      case 'critical': return 'Crítica';
-      default: return 'N/A';
-    }
-  };
-
-  const formatDate = (dateString: string): string => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('es-ES', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    });
-  };
-
-  const renderReportCard = ({ item }: { item: UserReport }) => (
-    <TouchableOpacity
-      style={styles.reportCard}
-      onPress={() => handleReportPress(item)}
-    >
-      <View style={styles.reportHeader}>
-        <View style={styles.reportStatusContainer}>
-          <View style={[
-            styles.statusDot,
-            { backgroundColor: getStatusColor(item.status) }
-          ]} />
-          <Text style={[
-            styles.statusText,
-            { color: getStatusColor(item.status) }
-          ]}>
-            {item.status}
-          </Text>
-        </View>
-        
-        <View style={styles.reportMeta}>
-          <Text style={styles.reportDate}>{formatDate(item.createdAt)}</Text>
-          <View style={[
-            styles.severityBadge,
-            { backgroundColor: getSeverityColor(item.severity) }
-          ]}>
-            <Text style={styles.severityText}>
-              {getSeverityLabel(item.severity)}
-            </Text>
-          </View>
-        </View>
+  // Mostrar loading mientras esperamos user (opcional)
+  if (!user && isLoading) {
+    return (
+      <View style={{ flex:1, justifyContent:'center', alignItems:'center' }}>
+        <ActivityIndicator color="#3B82F6" />
+        <Text style={{ marginTop: 8, color:'#64748B' }}>Cargando usuario...</Text>
       </View>
+    );
+  }
 
-      <Text style={styles.reportTitle} numberOfLines={2}>
-        {item.title}
-      </Text>
-
-      <Text style={styles.reportDescription} numberOfLines={2}>
-        {item.description}
-      </Text>
-
-      {item.updatedAt && (
-        <Text style={styles.lastUpdate}>
-          Actualizado: {formatDate(item.updatedAt)}
-        </Text>
-      )}
-    </TouchableOpacity>
-  );
-
-  const renderEmptyState = () => (
-    <View style={styles.emptyState}>
-      <Text style={styles.emptyIcon}>📝</Text>
-      <Text style={styles.emptyTitle}>No tienes denuncias aún</Text>
-      <Text style={styles.emptySubtitle}>
-        Comienza creando tu primera denuncia anónima
-      </Text>
-      <TouchableOpacity
-        style={styles.emptyButton}
-        onPress={handleCreateNew}
-      >
-        <Text style={styles.emptyButtonText}>Crear primera denuncia</Text>
-      </TouchableOpacity>
-    </View>
-  );
+  if (isLoading && !isRefreshing) {
+    return (
+      <View style={{ flex:1, justifyContent:'center', alignItems:'center' }}>
+        <ActivityIndicator color="#3B82F6" />
+        {error ? <Text style={{ marginTop:12, color:'#DC2626' }}>{error}</Text> : null}
+      </View>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
       {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={onGoBack}
-        >
-          <Text style={styles.backButtonText}>← Atrás</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Mis Denuncias</Text>
-        <View style={styles.headerSpace} />
-      </View>
+      <ScreenHeader title="SpeakUp" variant="brand"> 
+        <Text style={styles.headerSubtitle}>Mis denuncias</Text>
+      </ScreenHeader>
 
       {/* Stats */}
       <View style={styles.statsContainer}>
@@ -266,29 +198,85 @@ const MyReportsScreen: React.FC<MyReportsScreenProps> = ({
         </View>
       </View>
 
-      {/* Reports List */}
+      {/* Body intro (titulo dentro del body + conteo) */}
+      <View style={styles.bodyIntroRow}>
+        <Text style={styles.bodyTitle}>Mis denuncias</Text>
+        <Text style={styles.bodySubtitleCount}>{reports.length} en total</Text>
+      </View>
+
       <FlatList
         data={reports}
-        renderItem={renderReportCard}
         keyExtractor={(item) => item.id}
-        style={styles.reportsList}
-        contentContainerStyle={[
-          styles.reportsListContent,
-          reports.length === 0 && styles.emptyListContent
-        ]}
-        showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl
-            refreshing={isRefreshing}
-            onRefresh={onRefresh}
-            tintColor="#3B82F6"
-            colors={['#3B82F6']}
-          />
+          <RefreshControl refreshing={isRefreshing} onRefresh={onRefresh} />
         }
-        ListEmptyComponent={!isLoading ? renderEmptyState : null}
+        style={styles.reportsList}
+        contentContainerStyle={[styles.reportsListContent, reports.length === 0 && styles.emptyListContent]}
+        ListEmptyComponent={
+          <View style={{ padding:32, alignItems:'center' }}>
+            <Text style={{ color:'#64748B', marginBottom:6 }}>No tienes denuncias todavía.</Text>
+            {error ? <Text style={{ color:'#DC2626', fontSize:12 }}>Error: {error}</Text> : null}
+            {!error && !isLoading ? <Text style={{ color:'#94A3B8', fontSize:11 }}>Debug: lista vacía (raw logs en consola)</Text> : null}
+          </View>
+        }
+        renderItem={({ item }) => {
+          const statusColors: Record<UserReport['status'], {bg:string;color:string}> = {
+            'Pendiente': { bg:'#FDE68A', color:'#92400E' }, // amarillo
+            'Validado': { bg:'#BBF7D0', color:'#065F46' }, // verde
+            'Rechazado': { bg:'#FECACA', color:'#7F1D1D' }, // rojo
+            'En revisión': { bg:'#DBEAFE', color:'#1E3A8A' }, // azul
+          };
+          const sevMap: Record<UserReport['severity'], string> = {
+            low: 'Baja',
+            medium: 'Media',
+            high: 'Alta',
+            critical: 'Crítica'
+          };
+          const st = statusColors[item.status];
+          const severityLevel = item.severity; // 'low' | 'medium' | 'high' | 'critical'
+          const levelIndex = { low:1, medium:2, high:3, critical:4 }[severityLevel];
+          const segmentColors = ['#E2E8F0', '#E2E8F0', '#E2E8F0', '#E2E8F0'];
+          const activePalette = ['#4ADE80', '#FACC15', '#F87171', '#7F1D1D'];
+          for (let i=0;i<levelIndex;i++) segmentColors[i] = activePalette[i];
+          return (
+            <TouchableOpacity
+              onPress={() => handlePressReport(item)}
+              style={{
+                padding:16,
+                borderBottomWidth:1,
+                borderColor:'#E2E8F0',
+                backgroundColor:'#FFF'
+              }}
+            >
+              <Text style={{ fontWeight:'600', color:'#0F172A' }}>{item.title}</Text>
+              <Text
+                numberOfLines={2}
+                style={{ marginTop:4, fontSize:12, color:'#475569' }}
+              >
+                {item.description}
+              </Text>
+              <View style={{ marginTop:12, gap:8 }}>
+                <View style={{ flexDirection:'row', flexWrap:'wrap', gap:8, alignItems:'center' }}>
+                  <Text style={{ fontSize:11, color:'#334155' }}>{item.category}</Text>
+                  <View style={{ backgroundColor: st.bg, paddingHorizontal:8, paddingVertical:2, borderRadius:8 }}>
+                    <Text style={{ fontSize:10, fontWeight:'600', color: st.color }}>{item.status}</Text>
+                  </View>
+                </View>
+                {/* Barra de gravedad */}
+                <View style={{ flexDirection:'row', alignItems:'center', gap:6 }}>
+                  <View style={{ flexDirection:'row', width:'25%', minWidth:100, height:10, borderRadius:6, overflow:'hidden', backgroundColor:'#E2E8F0' }}>
+                    {segmentColors.map((c,idx) => (
+                      <View key={idx} style={{ flex:1, backgroundColor:c, marginRight: idx<3 ? 2 : 0, borderRadius:4 }} />
+                    ))}
+                  </View>
+                  <Text style={{ fontSize:10, color:'#475569', width:50, textAlign:'right' }}>{sevMap[item.severity]}</Text>
+                </View>
+              </View>
+            </TouchableOpacity>
+          );
+        }}
       />
 
-      {/* Floating Action Button */}
       <TouchableOpacity
         style={styles.fab}
         onPress={handleCreateNew}
@@ -304,41 +292,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F8FAFC',
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
-  },
-  backButton: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  backButtonText: {
-    fontSize: 16,
-    color: '#3B82F6',
-    fontWeight: '500',
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1F2937',
-  },
-  headerSpace: {
-    width: 60,
-  },
+  // Removed old header styles (using ScreenHeader)
   statsContainer: {
     flexDirection: 'row',
     backgroundColor: '#FFFFFF',
@@ -502,6 +456,24 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '300',
   },
+  bodyIntroRow: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 4,
+  },
+  bodyTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#0F172A',
+    letterSpacing: -0.5,
+  },
+  bodySubtitleCount: {
+    marginTop: 2,
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  headerSubtitle: { fontSize:14, color:'#DBEAFE', fontWeight:'500', textAlign:'center' },
 });
 
 export default MyReportsScreen;

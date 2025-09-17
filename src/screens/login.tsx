@@ -22,20 +22,35 @@ interface LoginScreenProps {
   onGoToRegister?: () => void;
 }
 
-const LoginScreen: React.FC<LoginScreenProps> = ({
-  navigation,
-  onLogin,
-  onForgotPassword,
-  onGoToRegister,
-}) => {
+const LoginScreen: React.FC<LoginScreenProps> = ({ navigation, onLogin, onForgotPassword, onGoToRegister }) => {
   const [formData, setFormData] = useState({
     email: '',
     password: '',
   });
   const [errors, setErrors] = useState<{[key: string]: string}>({});
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [authError, setAuthError] = useState<string>('');
+  const [showPassword, setShowPassword] = useState<boolean>(false);
   
   const { login } = useAuth();
+  const handleLogin = async () => {
+    if (!validateForm()) return;
+    setAuthError('');
+    setIsLoading(true);
+    try {
+      const res = await login({
+        email: formData.email.trim(),
+        password: formData.password.trim(),
+      });
+      if (!res?.token) {
+        setAuthError('Correo o contraseña inválidos');
+      }
+    } catch (e: any) {
+      setAuthError(e?.message || 'Error al iniciar sesión');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({
@@ -43,7 +58,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
       [field]: value
     }));
     
-    // Limpiar error del campo cuando el usuario escribe
+  
     if (errors[field]) {
       setErrors(prev => ({
         ...prev,
@@ -69,45 +84,6 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
-  };
-
-  const handleLogin = async () => {
-    if (!validateForm()) {
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      if (onLogin) {
-        onLogin(formData.email, formData.password);
-      } else {
-        // Usar el hook useAuth para hacer login
-        const response = await login(formData);
-        
-        Alert.alert(
-          'Login exitoso',
-          `Bienvenido ${response.user?.name || 'Usuario'}!`,
-          [
-            {
-              text: 'Continuar',
-              onPress: () => {
-                // Navegar a la pantalla principal (Home/Reports)
-                if (navigation) {
-                  navigation.reset({
-                    index: 0,
-                    routes: [{ name: 'Home' }], // Cambiar por el nombre de tu pantalla principal
-                  });
-                }
-              }
-            }
-          ]
-        );
-      }
-    } catch (error: any) {
-      Alert.alert('Error', error.message || 'Error al iniciar sesión');
-    } finally {
-      setIsLoading(false);
-    }
   };
 
   const handleForgotPassword = () => {
@@ -167,18 +143,29 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
             {/* Password Input */}
             <View style={styles.inputContainer}>
               <Text style={styles.inputLabel}>Contraseña</Text>
-              <TextInput
-                style={[styles.input, errors.password && styles.inputError]}
-                value={formData.password}
-                onChangeText={(value) => handleInputChange('password', value)}
-                placeholder="Tu contraseña"
-                placeholderTextColor="#A0A0A0"
-                secureTextEntry={true}
-                autoCapitalize="none"
-                autoCorrect={false}
-                editable={!isLoading}
-                maxLength={50}
-              />
+              <View style={{ flexDirection:'row', alignItems:'center' }}>
+                <TextInput
+                  style={[styles.input, { flex:1 }, errors.password && styles.inputError]}
+                  value={formData.password}
+                  onChangeText={(value) => handleInputChange('password', value)}
+                  placeholder="Tu contraseña"
+                  placeholderTextColor="#A0A0A0"
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  editable={!isLoading}
+                  maxLength={50}
+                />
+                <TouchableOpacity
+                  onPress={() => setShowPassword(prev=>!prev)}
+                  style={{ marginLeft:8, width:64, alignItems:'center' }}
+                  disabled={isLoading}
+                >
+                  <Text style={{ fontSize:14, color:'#3B82F6', fontWeight:'500' }}>
+                    {showPassword ? 'Ocultar' : 'Mostrar'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
               {errors.password && <Text style={styles.errorText}>{errors.password}</Text>}
             </View>
 
@@ -195,6 +182,13 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
                 {isLoading ? 'Iniciando...' : 'Iniciar Sesión'}
               </Text>
             </TouchableOpacity>
+
+            {authError ? (
+              <View style={styles.inlineErrorBox}>
+                <Text style={styles.inlineErrorIcon}>❌</Text>
+                <Text style={styles.inlineErrorText}>{authError}</Text>
+              </View>
+            ) : null}
 
             {/* Forgot Password */}
             <TouchableOpacity
@@ -339,9 +333,28 @@ const styles = StyleSheet.create({
   },
   registerLinkButton: {
     fontSize: 14,
-    color: '#10B981',
+    color: '#3B82F6',
     fontWeight: '500',
   },
+  authError: {
+    color: '#EF4444',
+    textAlign: 'center',
+    marginTop: 12,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  inlineErrorBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEE2E2',
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    padding: 12,
+    borderRadius: 10,
+    marginTop: 16,
+  },
+  inlineErrorIcon: { fontSize: 16, marginRight: 8 },
+  inlineErrorText: { flex: 1, color: '#B91C1C', fontSize: 13, fontWeight: '600' },
 });
 
 export default LoginScreen;
