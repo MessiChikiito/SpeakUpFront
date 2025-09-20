@@ -7,8 +7,14 @@
     "reset-project": "node ./scripts/reset-project.js",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web",
-    "lint": "expo lint"
+    "web": "cross-env EXPO_NO_INTERACTIVE=1 RCT_METRO_PORT=8090 EXPO_WEB_PORT=19006 expo start --web",
+    "web:build": "expo export --platform web --clear --output-dir dist",
+    "web:serve": "npm run web:build && serve dist -l 5000",
+    "lint": "expo lint",
+    "cypress:run": "node scripts/run-cypress.js run",
+    "cypress:open": "node scripts/run-cypress.js open",
+    "e2e": "start-server-and-test web:serve http://localhost:5000 cypress:run",
+    "e2e:open": "start-server-and-test web:serve http://localhost:5000 cypress:open"
   },
   "dependencies": {
     "@expo/vector-icons": "^14.1.0",
@@ -42,9 +48,18 @@
   "devDependencies": {
     "@babel/core": "^7.25.2",
     "@types/react": "~19.0.10",
+    "cross-env": "^7.0.3",
+    "cypress": "^13.17.0",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~9.2.0",
+    "serve": "^14.2.5",
+    "start-server-and-test": "^2.1.2",
     "typescript": "~5.8.3"
   },
-  "private": true
+  "private": true,
+  "ts-node": {
+    "compilerOptions": {
+      "moduleResolution": "node16"
+    }
+  }
 }

@@ -6,10 +6,14 @@ export interface SeverityInfo {
 }
 
 export function getSeverityInfo(g: number): SeverityInfo {
-	if (g >= 5) return { label: 'Crítica', color: '#B91C1C' }; 
-	if (g === 4) return { label: 'Alta', color: '#DC2626' };   
-	if (g === 3) return { label: 'Media', color: '#F59E0B' };  
-	return { label: 'Baja', color: '#3B82F6' };                
+	// Normalizamos a número por si llega como string desde la API
+	const n = Number(g);
+	// Escala esperada en la app: 1=Baja, 2=Media, 3=Alta, 4=Crítica
+	// Antes se marcaba Crítica solo para >=5, lo que hacía que 4 se mostrara como "Alta".
+	if (n >= 4) return { label: 'Crítica', color: '#B91C1C' };
+	if (n === 3) return { label: 'Alta', color: '#DC2626' };
+	if (n === 2) return { label: 'Media', color: '#F59E0B' };
+	return { label: 'Baja', color: '#3B82F6' };
 }
 
 // Mapeo de ubicaciones (códigos almacenados -> etiquetas en español)
