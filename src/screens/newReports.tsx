@@ -122,6 +122,8 @@ const NewReportScreen: React.FC<NewReportScreenProps> = ({
         style={[styles.selector, errorCategory && styles.selectorError]}
         onPress={() => openSelector('category')}
         disabled={sending}
+        testID="new-report-open-category"
+        accessibilityRole="button"
       >
         <Text style={[styles.selectorText, !categoryId && styles.selectorPlaceholder]}>
           {categoryId ? getSelectedLabel('category', categoryId) : 'Selecciona categoría'}
@@ -129,7 +131,10 @@ const NewReportScreen: React.FC<NewReportScreenProps> = ({
         <Text style={styles.selectorArrow}>▼</Text>
       </TouchableOpacity>
       {errorCategory ? (
-        <View style={[styles.inlineErrorBox, styles.inlineErrorCentered]}>
+        <View
+          style={[styles.inlineErrorBox, styles.inlineErrorCentered]}
+          testID="new-report-category-error"
+        >
           <Text style={[styles.inlineErrorText, styles.inlineErrorTextCentered]}>{errorCategory}</Text>
         </View>
       ) : null}
@@ -241,6 +246,8 @@ const NewReportScreen: React.FC<NewReportScreenProps> = ({
     <TouchableOpacity
       style={styles.selectorItem}
       onPress={() => handleSelectorSelect(item.id)}
+      testID={`new-report-option-${currentSelector}-${item.id}`}
+      accessibilityRole="button"
     >
       <Text style={styles.selectorItemIcon}>{item.icon || '📁'}</Text>
       <View style={{ flex: 1 }}>
@@ -253,7 +260,7 @@ const NewReportScreen: React.FC<NewReportScreenProps> = ({
   );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} testID="new-report-screen">
       <ScreenHeader title="SpeakUp" variant="brand">
         <Text style={styles.headerSubtitle}>Nueva denuncia</Text>
       </ScreenHeader>
@@ -273,7 +280,7 @@ const NewReportScreen: React.FC<NewReportScreenProps> = ({
           keyboardShouldPersistTaps="handled"
         >
           {/* Warning Message */}
-          <View style={styles.warningContainer}>
+          <View style={styles.warningContainer} testID="new-report-privacy-reminder">
             <Text style={styles.warningIcon}>🔐</Text>
             <Text style={styles.warningText}>
               No se guardarán tus datos personales
@@ -295,6 +302,8 @@ const NewReportScreen: React.FC<NewReportScreenProps> = ({
                 value={title}
                 onChangeText={setTitle}
                 editable={!sending}
+                testID="new-report-title"
+                accessibilityLabel="Campo de título de la denuncia"
               />
             </View>
 
@@ -315,6 +324,8 @@ const NewReportScreen: React.FC<NewReportScreenProps> = ({
                 textAlignVertical="top"
                 editable={!sending}
                 maxLength={500}
+                testID="new-report-description"
+                accessibilityLabel="Campo de descripción de la denuncia"
               />
               <Text style={styles.characterCount}>
                 {description.length}/500 caracteres
@@ -334,6 +345,8 @@ const NewReportScreen: React.FC<NewReportScreenProps> = ({
                 style={styles.selector}
                 onPress={() => openSelector('location')}
                 disabled={sending}
+                testID="new-report-open-location"
+                accessibilityRole="button"
               >
                 <Text style={[
                   styles.selectorText,
@@ -363,6 +376,9 @@ const NewReportScreen: React.FC<NewReportScreenProps> = ({
                         idx === severities.length - 1 && { marginRight: 0 },
                         active && { backgroundColor: s.bg, borderColor: s.color }
                       ]}
+                      testID={`new-report-severity-${s.id}`}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: active }}
                     >
                       <Text style={[styles.severityButtonText, active && { color: s.color }]}>
                         {s.label}
@@ -375,12 +391,18 @@ const NewReportScreen: React.FC<NewReportScreenProps> = ({
 
             {/* Error/Success Message */}
             {error ? (
-              <View style={[styles.inlineErrorBox, styles.inlineErrorCentered]}>
+              <View
+                style={[styles.inlineErrorBox, styles.inlineErrorCentered]}
+                testID="new-report-error-box"
+              >
                 <Text style={[styles.inlineErrorText, styles.inlineErrorTextCentered]}>{error}</Text>
               </View>
             ) : null}
             {success ? (
-              <View style={[styles.inlineSuccessBox, styles.inlineErrorCentered]}>
+              <View
+                style={[styles.inlineSuccessBox, styles.inlineErrorCentered]}
+                testID="new-report-success-box"
+              >
                 <Text style={[styles.inlineSuccessText, styles.inlineErrorTextCentered]}>{success}</Text>
               </View>
             ) : null}
@@ -393,6 +415,8 @@ const NewReportScreen: React.FC<NewReportScreenProps> = ({
               ]}
               onPress={handleSubmit}
               disabled={sending}
+              testID="new-report-submit"
+              accessibilityRole="button"
             >
               <Text style={styles.submitButtonText}>
                 {sending ? 'Enviando...' : 'Crear denuncia'}
@@ -416,6 +440,8 @@ const NewReportScreen: React.FC<NewReportScreenProps> = ({
               <TouchableOpacity
                 style={styles.modalCloseButton}
                 onPress={() => setShowSelector(false)}
+                testID="new-report-close-selector"
+                accessibilityRole="button"
               >
                 <Text style={styles.modalCloseText}>✕</Text>
               </TouchableOpacity>

@@ -152,3 +152,31 @@ Eliminar logs `[register]`, `[login]` al cerrar desarrollo.
 - Componente de alerta reutilizable.
 - Paginación.
 - Dark mode.
+
+## Preparar pruebas automatizadas
+
+El frontend expone identificadores (`testID`) estables para que puedas localizar elementos clave desde Cypress/Selenium sin depender de estilos o textos. Algunos ejemplos:
+
+| Flujo | Elemento | testID |
+|-------|----------|--------|
+| Login | Input de email | `login-email` |
+| Login | Botón enviar | `login-submit` |
+| Registro | Input de contraseña | `register-password` |
+| Registro | Mensaje de error API | `register-error-box` |
+| Nueva denuncia | Selector de categoría | `new-report-open-category` |
+| Nueva denuncia | Botón enviar | `new-report-submit` |
+| Tabs autenticadas | Inicio/Nueva denuncia/etc. | `tab-home`, `tab-new-report`, ... |
+
+Pasos sugeridos para automatizar:
+
+1. Instala Cypress como devDependency y añade scripts:
+   ```bash
+   npm install --save-dev cypress @testing-library/cypress
+   npx cypress open
+   ```
+   O bien usa Selenium/WebdriverIO si tu pipeline ya lo soporta.
+2. Levanta el front en modo web (`npm run web`) y apunta tus pruebas a `http://localhost:19006`.
+3. Stubbea las llamadas a la API con `cy.intercept` o herramientas equivalentes. Los servicios consumen endpoints bajo `EXPO_PUBLIC_API_BASE` (`/usuarios/*`, `/denuncias/*`, `/categorias`).
+4. Para la API crea una colección Postman/Newman con los endpoints listados en la sección anterior y orquesta la ejecución con `newman run` dentro de tu CI.
+
+> Nota: Los `testID` de React Native se traducen automáticamente a `data-testid` en la versión web, por lo que podrás seleccionarlos desde Cypress usando `cy.findByTestId('login-submit')`.

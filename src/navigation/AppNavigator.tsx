@@ -37,7 +37,12 @@ function LogoutButton({ onLogout }: { onLogout: () => void }) {
   }, [onLogout]);
 
   return (
-    <TouchableOpacity onPress={handlePress} style={{ marginRight: 12 }}>
+    <TouchableOpacity
+      onPress={handlePress}
+      style={{ marginRight: 12 }}
+      testID="logout-button"
+      accessibilityRole="button"
+    >
       <Text style={{ color: '#EF4444', fontWeight: '600' }}>Cerrar sesión</Text>
     </TouchableOpacity>
   );
@@ -72,11 +77,31 @@ function MainTabs({ onLogout }: { onLogout: () => void }) {
         },
       })}
     >
-      <Tab.Screen name="Inicio" component={Home} />
-  <Tab.Screen name="Nueva denuncia" component={NewReport} />
-  <Tab.Screen name="Mis denuncias" component={MyReports} />
-      <Tab.Screen name="Ranking" component={Ranking} />
-      <Tab.Screen name="Perfil" component={Profile} />
+      <Tab.Screen
+        name="Inicio"
+        component={Home}
+        options={{ tabBarTestID: 'tab-home', tabBarAccessibilityLabel: 'Ir a Inicio' }}
+      />
+      <Tab.Screen
+        name="Nueva denuncia"
+        component={NewReport}
+        options={{ tabBarTestID: 'tab-new-report', tabBarAccessibilityLabel: 'Ir a Nueva denuncia' }}
+      />
+      <Tab.Screen
+        name="Mis denuncias"
+        component={MyReports}
+        options={{ tabBarTestID: 'tab-my-reports', tabBarAccessibilityLabel: 'Ir a Mis denuncias' }}
+      />
+      <Tab.Screen
+        name="Ranking"
+        component={Ranking}
+        options={{ tabBarTestID: 'tab-ranking', tabBarAccessibilityLabel: 'Ir a Ranking' }}
+      />
+      <Tab.Screen
+        name="Perfil"
+        component={Profile}
+        options={{ tabBarTestID: 'tab-profile', tabBarAccessibilityLabel: 'Ir a Perfil' }}
+      />
     </Tab.Navigator>
   );
 }
