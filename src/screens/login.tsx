@@ -108,7 +108,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation, onLogin, onForgot
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} testID="login-screen">
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardAvoidingView}
@@ -136,6 +136,8 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation, onLogin, onForgot
                 autoCorrect={false}
                 editable={!isLoading}
                 maxLength={100}
+                testID="login-email"
+                accessibilityLabel="Campo de correo"
               />
               {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
             </View>
@@ -155,11 +157,15 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation, onLogin, onForgot
                   autoCorrect={false}
                   editable={!isLoading}
                   maxLength={50}
+                  testID="login-password"
+                  accessibilityLabel="Campo de contraseña"
                 />
                 <TouchableOpacity
                   onPress={() => setShowPassword(prev=>!prev)}
                   style={{ marginLeft:8, width:64, alignItems:'center' }}
                   disabled={isLoading}
+                  testID="login-toggle-password"
+                  accessibilityRole="button"
                 >
                   <Text style={{ fontSize:14, color:'#3B82F6', fontWeight:'500' }}>
                     {showPassword ? 'Ocultar' : 'Mostrar'}
@@ -177,6 +183,8 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation, onLogin, onForgot
               ]}
               onPress={handleLogin}
               disabled={isLoading}
+              testID="login-submit"
+              accessibilityRole="button"
             >
               <Text style={styles.loginButtonText}>
                 {isLoading ? 'Iniciando...' : 'Iniciar Sesión'}
@@ -184,7 +192,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation, onLogin, onForgot
             </TouchableOpacity>
 
             {authError ? (
-              <View style={styles.inlineErrorBox}>
+              <View style={styles.inlineErrorBox} testID="login-error-box">
                 <Text style={styles.inlineErrorIcon}>❌</Text>
                 <Text style={styles.inlineErrorText}>{authError}</Text>
               </View>
@@ -195,6 +203,8 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation, onLogin, onForgot
               style={styles.forgotPasswordContainer}
               onPress={handleForgotPassword}
               disabled={isLoading}
+              testID="login-forgot-password"
+              accessibilityRole="button"
             >
               <Text style={styles.forgotPasswordText}>
                 ¿Olvidaste tu contraseña?
@@ -207,6 +217,8 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ navigation, onLogin, onForgot
               <TouchableOpacity
                 onPress={handleGoToRegister}
                 disabled={isLoading}
+                testID="login-go-to-register"
+                accessibilityRole="button"
               >
                 <Text style={styles.registerLinkButton}>Regístrate</Text>
               </TouchableOpacity>

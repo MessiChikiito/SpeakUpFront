@@ -104,7 +104,7 @@ const RegisterScreen: React.FC = () => {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} testID="register-screen">
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardAvoidingView}
@@ -137,6 +137,8 @@ const RegisterScreen: React.FC = () => {
                 autoCorrect={false}
                 editable={!isLoading && !showSuccess}
                 maxLength={20}
+                testID="register-username"
+                accessibilityLabel="Campo de nombre de usuario"
               />
               <Text style={styles.inputHelper}>
                 Mínimo 3 caracteres, máximo 20
@@ -158,6 +160,8 @@ const RegisterScreen: React.FC = () => {
                 editable={!isLoading && !showSuccess}
                 keyboardType="email-address"
                 maxLength={50}
+                testID="register-email"
+                accessibilityLabel="Campo de correo"
               />
               {errors.email ? (
                 <Text style={styles.errorText}>{errors.email}</Text>
@@ -177,10 +181,14 @@ const RegisterScreen: React.FC = () => {
                   autoCorrect={false}
                   editable={!isLoading && !showSuccess}
                   maxLength={50}
+                  testID="register-password"
+                  accessibilityLabel="Campo de contraseña"
                 />
                 <TouchableOpacity
                   onPress={() => setShowPassword(!showPassword)}
                   style={{ marginLeft: 8, width: 60, alignItems: 'center' }}
+                  testID="register-toggle-password"
+                  accessibilityRole="button"
                 >
                   <Text style={{ fontSize: 14, color: '#3B82F6', fontWeight: '500' }}>
                     {showPassword ? 'Ocultar' : 'Mostrar'}
@@ -208,10 +216,14 @@ const RegisterScreen: React.FC = () => {
                   autoCorrect={false}
                   editable={!isLoading && !showSuccess}
                   maxLength={50}
+                  testID="register-confirm-password"
+                  accessibilityLabel="Campo de confirmación de contraseña"
                 />
                 <TouchableOpacity
                   onPress={() => setShowConfirmPassword(!showConfirmPassword)}
                   style={{ marginLeft: 8, width: 60, alignItems: 'center' }}
+                  testID="register-toggle-confirm-password"
+                  accessibilityRole="button"
                 >
                   <Text style={{ fontSize: 14, color: '#3B82F6', fontWeight: '500' }}>
                     {showConfirmPassword ? 'Ocultar' : 'Mostrar'}
@@ -224,7 +236,7 @@ const RegisterScreen: React.FC = () => {
             </View>
 
             {apiError ? (
-              <View style={styles.inlineErrorBox}>
+              <View style={styles.inlineErrorBox} testID="register-error-box">
                 <Text style={styles.inlineErrorIcon}>❌</Text>
                 <Text style={styles.inlineErrorText}>{apiError}</Text>
               </View>
@@ -232,7 +244,7 @@ const RegisterScreen: React.FC = () => {
 
             {showSuccess && (
               <>
-                <View style={styles.successContainer}>
+                <View style={styles.successContainer} testID="register-success-box">
                   <Text style={styles.successTitle}>¡Registro exitoso!</Text>
                   <Text style={styles.successText}>Tu cuenta ha sido creada correctamente.</Text>
                 </View>
@@ -249,6 +261,8 @@ const RegisterScreen: React.FC = () => {
               ]}
               onPress={handleRegister}
               disabled={isLoading || showSuccess}
+              testID="register-submit"
+              accessibilityRole="button"
             >
               <Text style={styles.registerButtonText}>
                 {isLoading ? 'Registrando...' : 'Registrarse'}
@@ -257,7 +271,11 @@ const RegisterScreen: React.FC = () => {
 
             <View style={styles.loginLinkContainer}>
               <Text style={styles.loginLinkText}>¿Ya tienes una cuenta? </Text>
-              <TouchableOpacity onPress={() => navigation.navigate('Login' as never)}>
+              <TouchableOpacity
+                onPress={() => navigation.navigate('Login' as never)}
+                testID="register-go-to-login"
+                accessibilityRole="button"
+              >
                 <Text style={styles.loginLinkButton}>Inicia sesión</Text>
               </TouchableOpacity>
             </View>
